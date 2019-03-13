@@ -1,9 +1,11 @@
 #!/usr/local/bin/python3
 import discord
 import bot_config as config
-from modules import message_handlers, background_tasks, logger
+from modules import message_handlers, logger, setupLogger, addSacredHandler, background_tasks
 import utils
 
+# Setup logger - Part #1
+setupLogger()
 
 # Check if we have a valid token
 if not config.bot_token:
@@ -16,27 +18,35 @@ if not config.bot_token:
 # Get Discord Client
 client = discord.Client()
 
+# Setup logger - Part #2
+addSacredHandler(client)
+
 
 # Setup on_ready() hook
 @client.event
 async def on_ready():
-    print('Logged in as', end=' ')
-    print(client.user.name + "#" + client.user.discriminator)
+    login_msg = '[Bot Start] - Logged in as {}#{}'.format(client.user.name, client.user.discriminator)
 
     if config.verbose_start:
-        await utils.print_all_chans(client)
-        print('Roles:')
-        await utils.print_role_ids(client)
-        print('Registered message handlers:')
-        for m in message_handlers:
-            print('  %s' % str(m))
-        print('Registered background tasks:')
-        for b in background_tasks:
-            print('  %s' % str(b))
+        login_msg += utils.get_all_channels(client)
+        login_msg += utils.get_all_role_ids(client)
 
+        login_msg += 'Registered message handlers:\n'
+        for m in message_handlers:
+            login_msg += '  {}'.format(str(m))
+
+        login_msg += 'Registered background tasks:\n'
+        for b in background_tasks:
+            login_msg += '  {}'.format(str(b))
+
+    # Log what we currently have
+    print(login_msg)
+    logger.info(login_msg)
+
+    # Init background tasks
     for b in background_tasks:
         client.loop.create_task(b(client))
-    print('\nBot active')
+
     await client.change_presence(activity=discord.Game(name='Haven Alpha'))  # tee-hee
 
 

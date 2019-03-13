@@ -1,34 +1,46 @@
 import discord
 
-# Utility function
-async def print_role_ids(client):
-    """Utility Function: Print all the roles IDs from all connected servers (guilds)"""
-    for g in client.guilds:
-        print('  %s' % g)
-        for r in g.roles:
-            print('    ' + r.name + ' = ' + str(r.id))
 
-async def print_all_chans(client):
+# Utility function
+async def get_all_role_ids(client):
+    '''
+    Utility Function: Print all the roles IDs from all connected servers (guilds)
+    '''
+    return_msg = 'Roles:\n'
+    for g in client.guilds:
+        return_msg += '  {}\n'.format(str(g))
+        for r in g.roles:
+            return_msg += '    {} = {}\n'.format(r.name, str(r.id))
+
+    return return_msg
+
+
+def get_all_channels(client):
+    '''
+    Utility Function: Gets all the text and voice channels
+    '''
     text_channel_list = []
     voice_channel_list = []
+    return_msg = ''
     for server in client.guilds:
-        print('Server tree:')
-        print(' >%s %d' % (server.name, server.id))
+        return_msg += 'Server tree: >{} [{}]\n'.format(server.name, server.id)
 
-        print(' |->%s' % 'Category Channels')
+        return_msg += ' |->Category Channels\n'
         for channel in server.channels:
             if type(channel) == discord.channel.CategoryChannel:
-                print(' |  |->%s %d' % (channel.name, channel.id))
+                return_msg += ' |  |->{} {}\n'.format(channel.name, channel.id)
                 voice_channel_list.append(channel)
 
-        print(' |->%s' % 'Text Channels')
+        return_msg += ' |->Text Channels\n'
         for channel in server.channels:
             if type(channel) == discord.channel.TextChannel:
-                print(' |  |->%s %d' % (channel.name, channel.id))
+                return_msg += ' |  |->{} {}\n'.format(channel.name, channel.id)
                 text_channel_list.append(channel)
 
-        print(' |->%s' % 'Voice Channels')
+        return_msg += ' |->Voice Channels\n'
         for channel in server.channels:
             if type(channel) == discord.channel.VoiceChannel:
-                print(' |  |->%s %d' % (channel.name, channel.id))
+                return_msg += ' |  |->{} {}\n'.format(channel.name, channel.id)
                 voice_channel_list.append(channel)
+
+    return return_msg

@@ -5,44 +5,65 @@ and add the messenger to the pug group.
 
 import discord
 import bot_config as config
-from modules.logger import logger
+from modules import logger
 import datetime
-from datetime import timedelta
 import json
 import aiofiles
 import asyncio
 
 puggers = {}
 
+
 async def sfc_pugs_handler(client, message):
-    '''Handles the messages sent in the #welcome channel'''
+    '''
+    Handles the !pugme and !unpugme messages
+    '''
     if (message.channel.id not in config.sfcpugger_allowed_channels):
         return False
 
-    if message.content.startswith('!pugme'):
-        f = add_pugger
-        reason = 'User asked to be added to the SourceForts Classic pug group'
-    elif message.content.startswith('!unpugme'):
-        f = remove_pugger
-        reason = 'User asked to be removed from the SourceForts Classic pug group'
+    pugme = message.content.startswith('!pugme')
+    unpugme = message.content.startswith('!unpugme')
 
-    result = await f(client, message.author, reason)
-    await dump_dict(puggers)
+    # Only parse !pugme and !unpugme messages
+    if not pugme and not unpugme:
+        return False
+
+    result = False
+    if pugme:
+        result = add_pugger(client, message.author, 'User asked to be added to the SourceForts Classic pug group')
+    else:
+        result = remove_pugger(client, message.author, 'User asked to be removed from the SourceForts Classic pug group')
+
+    # Only write to disk if any change happened
+    if result:
+        await dump_dict(puggers)
+
     return result
 
 
 async def dump_dict(pugdict):
-    async with aiofiles.open(config.sfcpugger_mem_path, 'w') as f:
+    '''
+    Writes down the pugger list to disk.
+    TODO: Avoid spamming the disk! Set limits!
+    TODO: Make non-blocking write calls
+    '''
+    async with aiofiles.open(config.sfcpugger_mem_path, 'w') as file:
         try:
-            await f.write(json.dumps(pugdict))
-            logger.info('Saved pugger checkins to disk')
+            await file.write(json.dumps(pugdict))
+            logmsg = 'Saved pugger checkins to disk'
+            print(logmsg)
+            logger.info(logmsg)
         except Exception as ex:
-            print(ex)
-            print('Could not write to json from {0}'.format(config.sfcpugger_mem_path))
+            logmsg = 'Exception: {}\n'.format(str(ex))
+            logmsg += 'Could not write to json from {0}'.format(config.sfcpugger_mem_path)
+            print(logmsg)
+            logger.info(logmsg)
 
 
 async def sfc_pugs_task(client):
-    '''background task to check for pugger status timeouts'''
+    '''
+    Background task to check for pugger status timeouts
+    '''
     global puggers
 
     await client.wait_until_ready()
@@ -52,25 +73,28 @@ async def sfc_pugs_task(client):
             async with aiofiles.open(config.sfcpugger_mem_path, 'r') as f:
                 try:
                     pd = json.loads(await f.read())
-                    puggers = {**puggers, **{int(k):v for k,v in pd.items()}}
+                    puggers = {**puggers, **{int(k): v for k, v in pd.items()}}
                 except Exception as ex:
-                    print(ex)
-                    print('Could not load valid json from {0}'.format(config.sfcpugger_mem_path))
+                    logmsg = 'Exception: {}\n'.format(str(ex))
+                    logmsg += 'Could not write to json from {0}'.format(config.sfcpugger_mem_path)
+                    print(logmsg)
+                    logger.info(logmsg)
 
             for k, v in puggers.items():
                 time_diff = (datetime.datetime.now() - datetime.datetime.strptime(v['ts'], "%Y-%m-%d %H:%M"))
-                
+
                 if time_diff.seconds >= (config.sfcpugger_timeout * 60):
-                    reason='Automatically restored from cached state'
+                    reason = 'Automatically restored from cached state'
                     guild = client.get_guild(id=v['g'])
                     user = guild.get_member(k)
                     await remove_pugger(client, user, reason)
-            print('                               ')
 
         except FileNotFoundError:
-            print('Error reading cache file at %s' % config.sfcpugger_mem_path)
+            logmsg = 'File Not Found while attempting to read cache file at: {}\n'.format(config.sfcpugger_mem_path)
+            print(logmsg)
+            logger.info(logmsg)
         finally:
-            await asyncio.sleep((config.sfcpugger_interval * 60))
+            await asyncio.sleep(config.sfcpugger_interval * 60)
 
 
 async def add_pugger(client, user, reason='No reason set'):
@@ -86,13 +110,17 @@ async def add_pugger(client, user, reason='No reason set'):
     try:
         pugger_role = discord.utils.get(user.guild.roles, id=config.sfcpugger_role_id)
         await user.add_roles(pugger_role, reason=reason)
-        puggers[user.id] = {'g': user.guild.id, 'ts':datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
-    
+        puggers[user.id] = {'g': user.guild.id, 'ts': datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+
     except discord.Forbidden:
-        logger.error('[!pugme] Insufficient permission to add the specified role to the user.')
+        logmsg = '[!pugme] Insufficient permission to add the specified role to the user.'
+        print(logmsg)
+        logger.error(logmsg)
 
     except discord.HTTPException:
-        logger.error("[!pugme] HTTPException (?!)")
+        logmsg = '[!pugme] HTTPException (?!)'
+        print(logmsg)
+        logger.error(logmsg)
 
     # Message handled
     return True
@@ -113,17 +141,19 @@ async def remove_pugger(client, user, reason='No reason set'):
         await user.remove_roles(pugger_role, reason=reason)
 
         try:
-            del(puggers[message.author.id])
-        except:
+            del puggers[user.id]
+        except KeyError:
             pass
 
     except discord.Forbidden:
-        logger.error('[!pugme] Insufficient permission to remove the specified role from the user.')
+        logmsg = '[!pugme] Insufficient permission to remove the specified role from the user.'
+        print(logmsg)
+        logger.error(logmsg)
 
     except discord.HTTPException:
-        logger.error("[!pugme] HTTPException (?!)")
+        logmsg = '[!pugme] HTTPException (?!)'
+        print(logmsg)
+        logger.error(logmsg)
 
     # Message handled
     return True
-
-

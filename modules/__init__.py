@@ -1,6 +1,9 @@
+import logging
+logger = logging.getLogger('sacred')
+
+from modules.logger_module import setupLogger, addSacredHandler
 from modules.welcome_channel import welcome_channel_handler
 from modules.sfc_pugs import sfc_pugs_handler, sfc_pugs_task
-from modules.logger import logger
 
 message_handlers = []
 background_tasks = []
